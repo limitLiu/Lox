@@ -1,4 +1,4 @@
-class Scanner {
+public class Scanner {
   private let src: String
   private var tokens: [Token] = []
 
@@ -25,7 +25,7 @@ class Scanner {
     "while": .while,
   ]
 
-  init(_ src: String) { self.src = src }
+  public init(_ src: String) { self.src = src }
 }
 
 // MARK: - Private Methods
@@ -55,8 +55,11 @@ extension Scanner {
   }
 
   private func peek() -> Character {
-    if isAtEnd { return "\0" }
-    return src[current]
+    src[at: current] ?? "\0"
+  }
+
+  private func peekNext() -> Character {
+    src[at: current + 1] ?? "\0"
   }
 
   private func string() -> Result<()> {
@@ -74,11 +77,11 @@ extension Scanner {
   }
 
   private func isDigit(_ c: Character) -> Bool {
-    c >= "0" && c <= "9"
+    ("0" ... "9").contains(c)
   }
 
   private func isAlpha(_ c: Character) -> Bool {
-    (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || c == "_"
+    ("a" ... "z").contains(c) || ("A" ... "Z").contains(c) || c == "_"
   }
 
   private func identifier() {
@@ -89,10 +92,6 @@ extension Scanner {
 
   private func isAlphaNumeric(_ c: Character) -> Bool {
     isAlpha(c) || isDigit(c)
-  }
-
-  private func peekNext() -> Character {
-    src[at: current + 1] ?? "\0"
   }
 
   private func number() {
@@ -108,7 +107,7 @@ extension Scanner {
 // MARK: Public Methods
 
 extension Scanner {
-  func scanTokens() -> Result<[Token]> {
+  public func scanTokens() -> Result<[Token]> {
     while !isAtEnd {
       start = current
       switch scanToken() {
@@ -121,7 +120,7 @@ extension Scanner {
     return .success(tokens)
   }
 
-  func scanToken() -> Result<()> {
+  public func scanToken() -> Result<()> {
     let c = advance()
     switch c {
     case "(": addToken(.leftParen)
@@ -151,14 +150,10 @@ extension Scanner {
       }
     case "\n": line += 1
     case " ", "\r", "\t": break
+    case "0" ... "9": number()
+    case "a" ... "z", "A" ... "Z", "_": identifier()
     default:
-      if isDigit(c) {
-        number()
-      } else if isAlpha(c) {
-        identifier()
-      } else {
-        return .failure(LoxError.unexpectedCharacter(line))
-      }
+      return .failure(LoxError.unexpectedCharacter(line))
     }
     return .success(())
   }

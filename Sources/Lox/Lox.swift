@@ -1,4 +1,5 @@
 import ArgumentParser
+import Core
 
 @main
 struct Lox: ParsableCommand {

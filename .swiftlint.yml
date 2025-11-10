@@ -11,6 +11,7 @@ disabled_rules:
   - empty_enum_arguments
   - void_function_in_ternary
   - cyclomatic_complexity
+  - nesting
 
 included:
   - Sources

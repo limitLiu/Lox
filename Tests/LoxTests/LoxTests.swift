@@ -1,5 +1,6 @@
 import Testing
 
+@testable import Core
 @testable import Lox
 
 @Test func testToken() async throws {
@@ -120,4 +121,24 @@ import Testing
   ]
 
   #expect(tokens == expectedTokens)
+}
+
+@Test func testASTPrinter() async throws {
+  let actual = ASTPrinter().print(
+    expr: .binary(
+      left: .unary(
+        op: Token(
+          type: .minus,
+          lexeme: "-",
+          line: 1
+        ),
+        right: .literal(.number(123))
+      ),
+      op:
+        Token(type: .star, lexeme: "*", line: 1),
+      right: .grouping(.literal(.number(45.67)))
+    )
+  )
+  let expected = "(* (- 123.0) (group 45.67))"
+  #expect(actual == expected)
 }
