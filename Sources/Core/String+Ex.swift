@@ -1,6 +1,6 @@
 nonisolated extension String {
   public subscript(at offset: Int) -> Element? {
-    guard let index = index(startIndex, offsetBy: offset, limitedBy: endIndex) else {
+    guard !isEmpty, let index = index(startIndex, offsetBy: offset, limitedBy: endIndex), index < endIndex else {
       return .none
     }
     return self[index]

@@ -18,7 +18,7 @@ struct Lox: ParsableCommand {
 extension Lox {
   func runFile(path: String) {
     do {
-      let content = try String(contentsOfFile: path)
+      let content = try String(contentsOfFile: path, encoding: .utf8)
       execute(content)
     } catch {
       print(error.localizedDescription)
@@ -37,7 +37,13 @@ extension Lox {
     let scanner = Scanner(src)
     switch scanner.scanTokens() {
     case .success(let tokens):
-      tokens.forEach { print($0) }
+      let parser = Parser(tokens)
+      switch parser.parse() {
+      case .success(let expr):
+        print(ASTPrinter().print(expr: expr))
+      case .failure(let e):
+        print(e.description)
+      }
     case .failure(let error):
       print(error.description)
     }

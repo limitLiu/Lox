@@ -1,5 +1,7 @@
 public struct ASTPrinter {
-  func print(expr: Expr) -> String {
+  public init() {}
+
+  public func print(expr: Expr) -> String {
     switch expr {
     case let .assign(name, value):
       parenthesize(name: name.lexeme, expressions: value)
