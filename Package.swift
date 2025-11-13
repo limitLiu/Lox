@@ -5,6 +5,7 @@ import PackageDescription
 
 let package = Package(
   name: "Lox",
+  platforms: [.macOS(.v10_15)],
   products: [
     .executable(name: "lox", targets: ["Lox"]),
     .library(name: "Core", targets: ["Core"]),
@@ -25,5 +26,6 @@ let package = Package(
       name: "LoxTests",
       dependencies: ["Lox", "Core"]
     ),
-  ]
+  ],
+  swiftLanguageModes: [.v6]
 )

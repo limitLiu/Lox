@@ -34,6 +34,7 @@ extension Lox {
   }
 
   private func execute(_ src: String) {
+    let interpreter = Interpreter()
     let scanner = Scanner(src)
     switch scanner.scanTokens() {
     case .success(let tokens):
@@ -41,6 +42,7 @@ extension Lox {
       switch parser.parse() {
       case .success(let expr):
         print(ASTPrinter().print(expr: expr))
+        interpreter.interpret(expr: expr)
       case .failure(let e):
         print(e.description)
       }

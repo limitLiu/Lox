@@ -3,14 +3,14 @@ public struct ASTPrinter {
 
   public func print(expr: Expr) -> String {
     switch expr {
-    case let .assign(name, value):
-      parenthesize(name: name.lexeme, expressions: value)
-    case let .binary(left, op, right):
-      parenthesize(name: op.lexeme, expressions: left, right)
-    case let .call(callee, _, arguments):
-      parenthesize(name: "call", parts: [print(expr: callee)] + arguments.map { print(expr: $0) })
-    case let .get(object, name):
-      parenthesize(name: ".", parts: [print(expr: object), name.lexeme])
+    case let .assign(assign):
+      parenthesize(name: assign.name.lexeme, expressions: assign.value)
+    case let .binary(binary):
+      parenthesize(name: binary.op.lexeme, expressions: binary.left, binary.right)
+    case let .call(call):
+      parenthesize(name: "call", parts: [print(expr: call.callee)] + call.arguments.map { print(expr: $0) })
+    case let .get(g):
+      parenthesize(name: ".", parts: [print(expr: g.object), g.name.lexeme])
     case .grouping(let expr):
       parenthesize(name: "group", expressions: expr)
     case let .literal(literal):
@@ -21,15 +21,15 @@ public struct ASTPrinter {
       case .false: "false"
       case .nil: "nil"
       }
-    case let .logical(left, op, right):
-      parenthesize(name: op.lexeme, expressions: left, right)
-    case let .set(object, name, value):
-      parenthesize(name: "=", parts: [print(expr: object), name.lexeme, print(expr: value)])
-    case let .super(_, method):
-      parenthesize(name: "super", parts: [method.lexeme])
+    case let .logical(logical):
+      parenthesize(name: logical.op.lexeme, expressions: logical.left, logical.right)
+    case let .set(s):
+      parenthesize(name: "=", parts: [print(expr: s.object), s.name.lexeme, print(expr: s.value)])
+    case let .super(sp):
+      parenthesize(name: "super", parts: [sp.method.lexeme])
     case .this: "this"
-    case let .unary(op, right):
-      parenthesize(name: op.lexeme, expressions: right)
+    case let .unary(unary):
+      parenthesize(name: unary.op.lexeme, expressions: unary.right)
     case .variable(let nm): nm.lexeme
     }
   }

@@ -68,7 +68,7 @@ extension Scanner {
       advance()
     }
     if isAtEnd {
-      return .failure(LoxError.unterminatedString(line))
+      return .failure(.scanner(.unterminatedString(line)))
     }
     advance()
     let value = src[start + 1 ..< current - 1]
@@ -153,7 +153,7 @@ extension Scanner {
     case "0" ... "9": number()
     case "a" ... "z", "A" ... "Z", "_": identifier()
     default:
-      return .failure(LoxError.unexpectedCharacter(line))
+      return .failure(.scanner(.unexpectedCharacter(line)))
     }
     return .success(())
   }

@@ -26,7 +26,7 @@ extension Parser {
     while match(.bangEqual, .equalEqual) {
       let op = previous
       let right = try comparison()
-      expr = .binary(left: expr, op: op, right: right)
+      expr = .binary(Expr.Binary(left: expr, op: op, right: right))
     }
     return expr
   }
@@ -36,7 +36,7 @@ extension Parser {
     while match(.greater, .greaterEqual, .less, .lessEqual) {
       let op = previous
       let right = try term()
-      expr = .binary(left: expr, op: op, right: right)
+      expr = .binary(Expr.Binary(left: expr, op: op, right: right))
     }
     return expr
   }
@@ -46,7 +46,7 @@ extension Parser {
     while match(.minus, .plus) {
       let op = previous
       let right = try factor()
-      expr = .binary(left: expr, op: op, right: right)
+      expr = .binary(Expr.Binary(left: expr, op: op, right: right))
     }
     return expr
   }
@@ -56,7 +56,7 @@ extension Parser {
     while match(.slash, .star) {
       let op = previous
       let right = try unary()
-      expr = .binary(left: expr, op: op, right: right)
+      expr = .binary(Expr.Binary(left: expr, op: op, right: right))
     }
     return expr
   }
@@ -65,7 +65,7 @@ extension Parser {
     while match(.minus, .plus) {
       let op = previous
       let right = try unary()
-      return .unary(op: op, right: right)
+      return .unary(Expr.Unary(op: op, right: right))
     }
     return try primary()
   }
@@ -81,7 +81,7 @@ extension Parser {
       let output = try expression()
       try consume(type: .rightParen)
       return Expr.grouping(output)
-    default: throw .expectExpression(peek())
+    default: throw .parser(.expectExpression(peek()))
     }
   }
 }
@@ -128,7 +128,7 @@ extension Parser {
     if check(type) {
       return advance()
     }
-    throw .expectExpressionAnd(peek(), type)
+    throw .parser(.expectExpressionAnd(peek(), type))
   }
 
   private func synchronize() {
