@@ -1,10 +1,13 @@
 public final class Interpreter {
   public init() {}
 
-  public func interpret(expr: Expr) {
+  private var environment = Environment()
+
+  public func interpret(statements: [Stmt]) {
     do {
-      let value = try evaluate(expr: expr)
-      print(value)
+      for statement in statements {
+        try execute(statement)
+      }
     } catch {
       print(error)
     }
@@ -12,32 +15,21 @@ public final class Interpreter {
 }
 
 extension Interpreter {
+  @discardableResult
   private func evaluate(expr: Expr) throws(LoxError) -> Value {
     switch expr {
-    case .assign(_):
-      Value.nil
-    case let .binary(binary):
-      try evaluate(binary: binary)
-    case .call(_):
-      Value.nil
-    case .get(_):
-      Value.nil
-    case let .grouping(grouping):
-      try evaluate(expr: grouping)
-    case let .literal(literal):
-      try evaluate(literal: literal)
-    case let .logical(logical):
-      try evaluate(logical: logical)
-    case let .set(s):
-      try evaluate(set: s)
-    case .super(_):
-      Value.nil
-    case .this(_):
-      Value.nil
-    case let .unary(unary):
-      try evaluate(unary: unary)
-    case .variable(_):
-      Value.nil
+    case let .assign(assign): try evaluate(assign: assign)
+    case let .binary(binary): try evaluate(binary: binary)
+    case .call(_): Value.nil
+    case .get(_): Value.nil
+    case let .grouping(grouping): try evaluate(expr: grouping)
+    case let .literal(literal): try evaluate(literal: literal)
+    case let .logical(logical): try evaluate(logical: logical)
+    case let .set(s): try evaluate(set: s)
+    case .super(_): Value.nil
+    case .this(_): Value.nil
+    case let .unary(unary): try evaluate(unary: unary)
+    case let .variable(variable): try evaluate(var: variable)
     }
   }
 
@@ -63,7 +55,7 @@ extension Interpreter {
     let right = try evaluate(expr: expr.right)
     return switch (expr.op.type, right) {
     case (.minus, .number(let n)): .number(-n)
-    case (.minus, _): throw LoxError.interpreter(.typeMismatch(expr.op, right))
+    case (.minus, _): throw .interpreter(.typeMismatch(expr.op, right))
     case (.bang, _): .boolean(!right.isTruthy)
     default: Value.boolean(false)
     }
@@ -94,6 +86,41 @@ extension Interpreter {
     case (.bangEqual, _, _): .boolean(left != right)
 
     default: throw .interpreter(.binaryFailure(expr.op, left, right))
+    }
+  }
+
+  private func evaluate(`var` token: Token) throws(LoxError) -> Value {
+    (try environment.get(token)) ?? .nil
+  }
+
+  private func evaluate(assign expr: Expr.Assign) throws(LoxError) -> Value {
+    let value = try evaluate(expr: expr.value)
+    try environment.assign(expr.name, forValue: value)
+    return value
+  }
+}
+
+extension Interpreter {
+  private func execute(_ stmt: Stmt) throws(LoxError) {
+    switch stmt {
+    case let .block(block): try execute(block.statements, withEnv: Environment(enclosing: environment))
+    case let .expr(expr): try evaluate(expr: expr)
+    case let .print(expr): Swift.print(try evaluate(expr: expr))
+    case let .var(statement): try evaluate(var: statement)
+    }
+  }
+
+  private func evaluate(`var` stmt: Stmt.Var) throws(LoxError) {
+    let value = try stmt.initializer.map(evaluate(expr:))
+    environment.define(stmt.name.lexeme, forValue: value)
+  }
+
+  private func execute(_ statements: [Stmt], withEnv env: Environment) throws(LoxError) {
+    let previous = environment
+    environment = env
+    defer { environment = previous }
+    for statement in statements {
+      try execute(statement)
     }
   }
 }

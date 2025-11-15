@@ -82,7 +82,7 @@ extension TokenType: CustomStringConvertible {
 extension TokenType: Equatable {
   public static func == (lhs: TokenType, rhs: TokenType) -> Bool {
     switch (lhs, rhs) {
-    case (ident(let a), ident(let b)): a == b
+    case (.ident(let a), .ident(let b)): a == b
     case (.str(let a), .str(let b)): a == b
     case (.number(let a), .number(let b)): a == b
     case (.leftParen, .leftParen): true
@@ -122,6 +122,15 @@ extension TokenType: Equatable {
     case (.while, .while): true
     case (.eof, .eof): true
     default: false
+    }
+  }
+}
+
+extension TokenType: CustomComparable {
+  public static func =~ (lhs: TokenType, rhs: TokenType) -> Bool {
+    switch (lhs, rhs) {
+    case (.ident(_), .ident(_)): true
+    default: lhs == rhs
     }
   }
 }

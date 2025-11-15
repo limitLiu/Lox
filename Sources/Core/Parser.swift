@@ -6,19 +6,23 @@ public class Parser {
     self.tokens = tokens
   }
 
-  public func parse() -> Result<Expr> {
-    do {
-      return .success(try expression())
-    } catch {
-      synchronize()
-      return .failure(error)
+  public func parse() -> Result<[Stmt]> {
+    var statements: [Stmt] = []
+    while !isAtEnd {
+      do {
+        statements.append(try declaration())
+      } catch {
+        synchronize()
+        return .failure(error)
+      }
     }
+    return .success(statements)
   }
 }
 
 extension Parser {
   private func expression() throws(LoxError) -> Expr {
-    try equality()
+    try assignment()
   }
 
   private func equality() throws(LoxError) -> Expr {
@@ -71,18 +75,97 @@ extension Parser {
   }
 
   private func primary() throws(LoxError) -> Expr {
-    switch advance().type {
+    let current = advance()
+    switch current.type {
     case .false: return .literal(.false)
     case .true: return .literal(.true)
     case .nil: return .literal(.nil)
     case .number(let n): return .literal(.number(n))
     case .str(let s): return .literal(.string(s))
+    case .ident(_): return .variable(current)
     case .leftParen:
       let output = try expression()
-      try consume(type: .rightParen)
+      try consume(type: .rightParen) { [unowned self] in
+        .expectAfterExpression(peek(), $0)
+      }
       return Expr.grouping(output)
     default: throw .parser(.expectExpression(peek()))
     }
+  }
+}
+
+extension Parser {
+  private func statement() throws(LoxError) -> Stmt {
+    if match(.print) {
+      return try printStatement()
+    }
+    if match(.leftBrace) {
+      return .block(Stmt.Block(statements: try blockStatement()))
+    }
+    return try expressionStatement()
+  }
+
+  private func declaration() throws(LoxError) -> Stmt {
+    if match(.var) {
+      return try varDeclaration()
+    }
+    return try statement()
+  }
+
+  private func varDeclaration() throws(LoxError) -> Stmt {
+    let name = try consume(type: .ident("")) { [unowned self] _ in
+      .expectVariableName(peek())
+    }
+    var initializer: Expr? = .none
+    if match(.equal) {
+      initializer = try expression()
+    }
+    try consume(type: .semicolon) { [unowned self] in
+      .expectAfterVariableDeclaration(peek(), $0)
+    }
+    return .var(Stmt.Var(name: name, initializer: initializer))
+  }
+}
+
+extension Parser {
+  private func printStatement() throws(LoxError) -> Stmt {
+    let value = try expression()
+    try consume(type: .semicolon) { [unowned self] in
+      .expectAfterValue(peek(), $0)
+    }
+    return .print(value)
+  }
+
+  private func blockStatement() throws(LoxError) -> [Stmt] {
+    var statements: [Stmt] = []
+    while !check(.rightBrace), !isAtEnd {
+      statements.append(try declaration())
+    }
+    try consume(type: .rightBrace) { [unowned self] in
+      .expectBlock(peek(), $0)
+    }
+    return statements
+  }
+
+  private func expressionStatement() throws(LoxError) -> Stmt {
+    let expr = try expression()
+    try consume(type: .semicolon) { [unowned self] in
+      .expectAfterExpression(peek(), $0)
+    }
+    return .expr(expr)
+  }
+
+  private func assignment() throws(LoxError) -> Expr {
+    let expr = try equality()
+    if match(.equal) {
+      let equals = previous
+      let value = try assignment()
+      if case let .variable(t) = expr {
+        return .assign(Expr.Assign(name: t, value: value))
+      }
+      throw .parser(.invalidAssignTarget(equals))
+    }
+    return expr
   }
 }
 
@@ -99,7 +182,7 @@ extension Parser {
     if isAtEnd {
       false
     } else {
-      peek().type == type
+      peek().type =~ type
     }
   }
 
@@ -124,11 +207,14 @@ extension Parser {
   }
 
   @discardableResult
-  private func consume(type: TokenType) throws(LoxError) -> Token {
+  private func consume(
+    type: TokenType,
+    expect: @escaping (TokenType) -> ParserError
+  ) throws(LoxError) -> Token {
     if check(type) {
       return advance()
     }
-    throw .parser(.expectExpressionAnd(peek(), type))
+    throw .parser(expect(type))
   }
 
   private func synchronize() {

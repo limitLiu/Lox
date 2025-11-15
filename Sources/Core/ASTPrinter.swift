@@ -30,10 +30,9 @@ public struct ASTPrinter {
     case .this: "this"
     case let .unary(unary):
       parenthesize(name: unary.op.lexeme, expressions: unary.right)
-    case .variable(let nm): nm.lexeme
+    case let .variable(tk): tk.lexeme
     }
   }
-
 }
 
 extension ASTPrinter {
