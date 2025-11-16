@@ -44,7 +44,11 @@ extension Interpreter {
   }
 
   private func evaluate(logical expr: Expr.Logical) throws(LoxError) -> Value {
-    .nil
+    let left = try evaluate(expr: expr.left)
+    return switch (expr.op.type, left.isTruthy) {
+    case (.or, true), (.and, false): left
+    default: try evaluate(expr: expr.right)
+    }
   }
 
   private func evaluate(set expr: Expr.Set) throws(LoxError) -> Value {
@@ -105,8 +109,10 @@ extension Interpreter {
     switch stmt {
     case let .block(block): try execute(block.statements, withEnv: Environment(enclosing: environment))
     case let .expr(expr): try evaluate(expr: expr)
+    case let .if(i): try evaluate(if: i)
     case let .print(expr): Swift.print(try evaluate(expr: expr))
     case let .var(statement): try evaluate(var: statement)
+    case let .while(statement): try evaluate(while: statement)
     }
   }
 
@@ -115,11 +121,25 @@ extension Interpreter {
     environment.define(stmt.name.lexeme, forValue: value)
   }
 
+  private func evaluate(`while` stmt: Stmt.While) throws(LoxError) {
+    while (try evaluate(expr: stmt.condition)).isTruthy {
+      try execute(stmt.body)
+    }
+  }
+
   private func execute(_ statements: [Stmt], withEnv env: Environment) throws(LoxError) {
     let previous = environment
     environment = env
     defer { environment = previous }
     for statement in statements {
+      try execute(statement)
+    }
+  }
+
+  private func evaluate(`if` stmt: Stmt.If) throws(LoxError) {
+    if (try evaluate(expr: stmt.condition)).isTruthy {
+      try execute(stmt.thenBranch)
+    } else if let statement = stmt.elseBranch {
       try execute(statement)
     }
   }

@@ -21,7 +21,13 @@ let package = Package(
         "Core",
       ],
     ),
-    .target(name: "Core"),
+    .target(
+      name: "Core",
+      swiftSettings: [
+        .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+        .enableUpcomingFeature("InferIsolatedConformances"),
+      ]
+    ),
     .testTarget(
       name: "LoxTests",
       dependencies: ["Lox", "Core"]

@@ -25,6 +25,26 @@ extension Parser {
     try assignment()
   }
 
+  private func or() throws(LoxError) -> Expr {
+    var expr = try and()
+    while match(.or) {
+      let op = previous
+      let right = try and()
+      expr = .logical(Expr.Logical(left: expr, op: op, right: right))
+    }
+    return expr
+  }
+
+  private func and() throws(LoxError) -> Expr {
+    var expr = try equality()
+    while match(.and) {
+      let op = previous
+      let right = try equality()
+      expr = .logical(Expr.Logical(left: expr, op: op, right: right))
+    }
+    return expr
+  }
+
   private func equality() throws(LoxError) -> Expr {
     var expr = try comparison()
     while match(.bangEqual, .equalEqual) {
@@ -96,12 +116,11 @@ extension Parser {
 
 extension Parser {
   private func statement() throws(LoxError) -> Stmt {
-    if match(.print) {
-      return try printStatement()
-    }
-    if match(.leftBrace) {
-      return .block(Stmt.Block(statements: try blockStatement()))
-    }
+    if match(.for) { return try forStatement() }
+    if match(.if) { return try ifStatement() }
+    if match(.print) { return try printStatement() }
+    if match(.while) { return try whileStatement() }
+    if match(.leftBrace) { return .block(Stmt.Block(statements: try blockStatement())) }
     return try expressionStatement()
   }
 
@@ -128,12 +147,70 @@ extension Parser {
 }
 
 extension Parser {
+  private func ifStatement() throws(LoxError) -> Stmt {
+    let condition = try expression()
+    let thenBranch: Stmt = try statement()
+    var elseBranch: Stmt?
+    if match(.else) {
+      elseBranch = try statement()
+    }
+    return .if(Stmt.If(condition: condition, thenBranch: thenBranch, elseBranch: elseBranch))
+  }
+
   private func printStatement() throws(LoxError) -> Stmt {
     let value = try expression()
     try consume(type: .semicolon) { [unowned self] in
       .expectAfterValue(peek(), $0)
     }
     return .print(value)
+  }
+
+  private func whileStatement() throws(LoxError) -> Stmt {
+    let condition = try expression()
+    let body = try statement()
+    return .while(Stmt.While(condition: condition, body: body))
+  }
+
+  private func forStatement() throws(LoxError) -> Stmt {
+    try consume(type: .leftParen) { [unowned self] in
+      .expectBlock(peek(), $0)
+    }
+    let initializer: Stmt?
+    if match(.semicolon) {
+      initializer = .none
+    } else if match(.var) {
+      initializer = try varDeclaration()
+    } else {
+      initializer = try expressionStatement()
+    }
+    let condition =
+      if !check(.semicolon) {
+        try expression()
+      } else {
+        Expr.literal(.true)
+      }
+
+    try consume(type: .semicolon) { [unowned self] in
+      .expectAfterExpression(peek(), $0)
+    }
+    let increment: Expr? =
+      if !check(.rightParen) {
+        try expression()
+      } else {
+        .none
+      }
+    try consume(type: .rightParen) { [unowned self] in
+      .expectAfterExpression(peek(), $0)
+    }
+    var body = try statement()
+    if let increment {
+      body = .block(Stmt.Block(statements: [body, .expr(increment)]))
+    }
+    body = .while(Stmt.While(condition: condition, body: body))
+    if let initializer {
+      body = .block(Stmt.Block(statements: [initializer, body]))
+    }
+    return body
   }
 
   private func blockStatement() throws(LoxError) -> [Stmt] {
@@ -156,7 +233,7 @@ extension Parser {
   }
 
   private func assignment() throws(LoxError) -> Expr {
-    let expr = try equality()
+    let expr = try or()
     if match(.equal) {
       let equals = previous
       let value = try assignment()

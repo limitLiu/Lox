@@ -62,18 +62,17 @@ extension Scanner {
     src[at: current + 1] ?? "\0"
   }
 
-  private func string() -> Result<()> {
+  private func string() throws(LoxError) {
     while peek() != "\"" && !isAtEnd {
       if peek() == "\n" { line += 1 }
       advance()
     }
     if isAtEnd {
-      return .failure(.scanner(.unterminatedString(line)))
+      throw .scanner(.unterminatedString(line))
     }
     advance()
     let value = src[start + 1 ..< current - 1]
     addToken(.str(String(value)))
-    return .success(())
   }
 
   private func isDigit(_ c: Character) -> Bool {
@@ -110,17 +109,17 @@ extension Scanner {
   public func scanTokens() -> Result<[Token]> {
     while !isAtEnd {
       start = current
-      switch scanToken() {
-      case .success:
-        break
-      case .failure(let e): return .failure(e)
+      do {
+        try scanToken()
+      } catch {
+        return .failure(error)
       }
     }
     tokens.append(Token(type: .eof, lexeme: "", line: line))
     return .success(tokens)
   }
 
-  public func scanToken() -> Result<()> {
+  public func scanToken() throws(LoxError) {
     let c = advance()
     switch c {
     case "(": addToken(.leftParen)
@@ -137,11 +136,7 @@ extension Scanner {
     case "=": addToken(match("=") ? .equalEqual : .equal)
     case "<": addToken(match("=") ? .lessEqual : .less)
     case ">": addToken(match("=") ? .greaterEqual : .greater)
-    case "\"": return string()
-    case "o":
-      if peek() == "r" {
-        addToken(.or)
-      }
+    case "\"": try string()
     case "/":
       if match("/") {
         while peek() != "\n" && !isAtEnd { advance() }
@@ -152,9 +147,7 @@ extension Scanner {
     case " ", "\r", "\t": break
     case "0" ... "9": number()
     case "a" ... "z", "A" ... "Z", "_": identifier()
-    default:
-      return .failure(.scanner(.unexpectedCharacter(line)))
+    default: throw .scanner(.unexpectedCharacter(line))
     }
-    return .success(())
   }
 }
