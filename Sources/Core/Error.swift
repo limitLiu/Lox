@@ -1,103 +1,144 @@
+import protocol Foundation.LocalizedError
+
+protocol LoxErrorProtocol: LocalizedError {
+  var line: Int { get }
+  var location: String { get }
+  var message: String { get }
+}
+
+extension LoxErrorProtocol {
+  public var errorDescription: String? {
+    "[line \(line)] Error \(location): \(message)"
+  }
+
+  var location: String { "" }
+}
+
 public enum LoxError: Swift.Error {
   case scanner(ScannerError)
   case parser(ParserError)
   case interpreter(InterpreterError)
   case environment(EnvironmentError)
+  case `return`(Return)
+  case unknown(any Error)
 }
 
 public typealias Result<T> = Swift.Result<T, LoxError>
 
-extension LoxError {
-  private func report(line: Int, `where`: String, message: String) -> String {
-    "[line \(line)] Error\(`where`): \(message)"
-  }
-}
-
-extension LoxError: CustomStringConvertible {
-  public var description: String {
+extension LoxError: LocalizedError {
+  public var errorDescription: String? {
     switch self {
-    case .scanner(let e):
-      switch e {
-      case .unexpectedCharacter(let line):
-        report(line: line, where: "", message: "Unexpected character.")
-      case .unterminatedString(let line):
-        report(line: line, where: "", message: "Unterminated string.")
-      }
-    case .parser(let e):
-      switch e {
-      case let .expectAfterValue(token, type):
-        report(line: token.line, where: "", message: "Expect '\(type.description)' after value.")
-      case let .expectAfterExpression(token, type):
-        report(
-          line: token.line,
-          where: " at '\(isEndStr(token))'",
-          message: "Expect '\(type.description)' after expression."
-        )
-      case let .expectExpression(token):
-        report(
-          line: token.line,
-          where: " at '\(isEndStr(token))'",
-          message: "Expect expression."
-        )
-      case let .expectVariableName(token):
-        report(line: token.line, where: "", message: "Expect variable name.")
-      case let .expectAfterVariableDeclaration(token, type):
-        report(
-          line: token.line,
-          where: " at '\(isEndStr(token))'",
-          message: "Expect '\(type.description)' after variable declaration."
-        )
-      case let .expectBlock(token, type):
-        report(
-          line: token.line,
-          where: " at '\(isEndStr(token))'",
-          message: "Expect '\(type.description)' after block."
-        )
-      case let .invalidAssignTarget(token):
-        report(line: token.line, where: " at '\(isEndStr(token))'", message: "Invalid assignment target.")
-      }
-    case .interpreter(let e):
-      switch e {
-      case let .typeMismatch(op, right):
-        "Operand must be a \(right). [line \(op.line)]"
-      case let .binaryFailure(op, l, r):
-        "Failed to perform \(op.type) between operands \(l) \(r). [line \(op.line)]"
-      case let .divByZero(op, _, _): "error: division by zero. [line \(op.line)]"
-      }
-    case .environment(let e):
-      switch e {
-      case .undefinedVariable(let ident):
-        "Undefined variable '\(ident)'."
-      }
+    case let .scanner(e): e.errorDescription
+    case let .parser(e): e.errorDescription
+    case let .interpreter(e): e.errorDescription
+    case let .environment(e): e.errorDescription
+    case let .unknown(e): e.localizedDescription
+    case let .return(ret): ret.value.description
     }
   }
 }
 
-private func isEndStr(_ tk: Token) -> String {
-  tk.type == .eof ? "end" : "\(tk.lexeme)"
-}
-
-public enum ScannerError: Swift.Error {
+public enum ScannerError: LoxErrorProtocol {
   case unexpectedCharacter(Int)
   case unterminatedString(Int)
+
+  var line: Int {
+    switch self {
+    case let .unexpectedCharacter(l), let .unterminatedString(l): l
+    }
+  }
+
+  var message: String {
+    switch self {
+    case .unexpectedCharacter: "Unexpected character."
+    case .unterminatedString: "Unterminated string."
+    }
+  }
 }
 
-public enum ParserError: Swift.Error {
-  case expectAfterValue(Token, TokenType)
-  case expectAfterExpression(Token, TokenType)
-  case expectExpression(Token)
-  case expectVariableName(Token)
-  case expectAfterVariableDeclaration(Token, TokenType)
-  case expectBlock(Token, TokenType)
-  case invalidAssignTarget(Token)
+public struct ParserError: LoxErrorProtocol {
+  public enum Kind: Sendable {
+    case expectBefore(TokenType, String)
+    case expectAfter(TokenType, String)
+    case expectExpression
+    case expectVariableName
+    case invalidAssignTarget
+    case maximumArgumentCounts
+    case expect(String)
+
+    var message: String {
+      switch self {
+      case .expectBefore(let type, let kind): "Expect '\(type)' before \(kind)."
+      case .expectAfter(let type, let kind): "Expect '\(type)' after \(kind)."
+      case .expectVariableName: "Expect variable name."
+      case .expectExpression: "Expect expression."
+      case .invalidAssignTarget: "Invalid assignment target."
+      case .maximumArgumentCounts: "Can't have more than 255 arguments."
+      case .expect(let s): "Expect \(s) name."
+      }
+    }
+  }
+
+  public let kind: Kind
+  public let token: Token
+
+  var location: String {
+    token.type == .eof ? "at end" : "at '\(token.lexeme)'"
+  }
+
+  var line: Int { token.line }
+
+  var message: String { kind.message }
 }
 
-public enum InterpreterError: Swift.Error {
+public enum InterpreterError: LoxErrorProtocol {
+  var line: Int { token.line }
+
+  var message: String {
+    switch self {
+    case let .typeMismatch(_, right):
+      "Operand must be a \(right)."
+    case let .binaryFailure(op, l, r):
+      "Failed to perform \(op.type) between operands \(l) \(r)."
+    case .divByZero(_, _, _): "error: division by zero."
+    case .canNotCallable(_):
+      "Can only call functions and classes."
+    case let .incorrectArgsCount(_, arity, argsCount):
+      "Expected \(arity) arguments but got \(argsCount)."
+    }
+  }
+
+  private var token: Token {
+    switch self {
+    case .typeMismatch(let t, _): t
+    case .binaryFailure(let t, _, _): t
+    case .divByZero(let t, _, _): t
+    case .canNotCallable(let t): t
+    case .incorrectArgsCount(let t, _, _): t
+    }
+  }
+
   case typeMismatch(Token, Value)
   case binaryFailure(Token, Value, Value)
   case divByZero(Token, Value, Value)
+  case canNotCallable(Token)
+  case incorrectArgsCount(Token, Int, Int)
 }
 
-public enum EnvironmentError: Swift.Error {
+public enum EnvironmentError: LoxErrorProtocol {
+  var line: Int { 1 }
+
+  var message: String { "" }
+
+  public var errorDescription: String? {
+    switch self {
+    case .undefinedVariable(let ident): "Undefined variable '\(ident)'."
+    }
+  }
+
   case undefinedVariable(String)
+}
+
+public struct Return: Swift.Error {
+  let value: Value
 }

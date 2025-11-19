@@ -2,6 +2,7 @@ public enum Value: Sendable {
   case string(String)
   case number(Double)
   case boolean(Bool)
+  case callable(AnyCallable)
   case `nil`
 }
 
@@ -23,6 +24,7 @@ extension Value: CustomStringConvertible {
     case .string(let s): s
     case .number(let n): n.description
     case .boolean(let b): b.description
+    case .callable(let v): v.description
     case .nil: "nil"
     }
   }

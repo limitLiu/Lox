@@ -1,7 +1,27 @@
-public final class Interpreter {
-  public init() {}
+import struct Foundation.Date
 
-  private var environment = Environment()
+public final class Interpreter {
+  public init() {
+    globals = Environment()
+    environment = globals
+    globals.define(
+      "clock",
+      forValue: .callable(
+        AnyCallable(
+          NativeFn(
+            arity: 0,
+            closure: { _, _ in
+              .number(Date().timeIntervalSince1970)
+            }
+          )
+        )
+      )
+    )
+  }
+
+  let globals: Environment
+
+  private var environment: Environment
 
   public func interpret(statements: [Stmt]) {
     do {
@@ -9,7 +29,7 @@ public final class Interpreter {
         try execute(statement)
       }
     } catch {
-      print(error)
+      print(error.localizedDescription)
     }
   }
 }
@@ -20,7 +40,7 @@ extension Interpreter {
     switch expr {
     case let .assign(assign): try evaluate(assign: assign)
     case let .binary(binary): try evaluate(binary: binary)
-    case .call(_): Value.nil
+    case let .call(call): try evaluate(call: call)
     case .get(_): Value.nil
     case let .grouping(grouping): try evaluate(expr: grouping)
     case let .literal(literal): try evaluate(literal: literal)
@@ -30,6 +50,24 @@ extension Interpreter {
     case .this(_): Value.nil
     case let .unary(unary): try evaluate(unary: unary)
     case let .variable(variable): try evaluate(var: variable)
+    }
+  }
+
+  private func evaluate(call: Expr.Call) throws(LoxError) -> Value {
+    let callee = try evaluate(expr: call.callee)
+    let arguments = try call.arguments.map(evaluate(expr:))
+    guard case let .callable(fn) = callee else {
+      throw .interpreter(.canNotCallable(call.paren))
+    }
+    guard arguments.count == fn.arity else {
+      throw .interpreter(.incorrectArgsCount(call.paren, fn.arity, arguments.count))
+    }
+    do {
+      return try fn.call(interpreter: self, arguments: arguments)
+    } catch let e as LoxError {
+      throw e
+    } catch {
+      throw .unknown(error)
     }
   }
 
@@ -111,8 +149,10 @@ extension Interpreter {
     case let .expr(expr): try evaluate(expr: expr)
     case let .if(i): try evaluate(if: i)
     case let .print(expr): Swift.print(try evaluate(expr: expr))
+    case let .return(ret): try evaluate(return: ret)
     case let .var(statement): try evaluate(var: statement)
     case let .while(statement): try evaluate(while: statement)
+    case let .function(fn): try evaluate(fn: fn)
     }
   }
 
@@ -127,7 +167,12 @@ extension Interpreter {
     }
   }
 
-  private func execute(_ statements: [Stmt], withEnv env: Environment) throws(LoxError) {
+  private func evaluate(fn stmt: Stmt.Function) throws(LoxError) {
+    let fn = Fn(declaration: stmt, closure: environment)
+    environment.define(stmt.name.lexeme, forValue: .callable(AnyCallable(fn)))
+  }
+
+  func execute(_ statements: [Stmt], withEnv env: Environment) throws(LoxError) {
     let previous = environment
     environment = env
     defer { environment = previous }
@@ -142,6 +187,14 @@ extension Interpreter {
     } else if let statement = stmt.elseBranch {
       try execute(statement)
     }
+  }
+
+  private func evaluate(`return` stmt: Stmt.Return) throws(LoxError) {
+    var value: Value = .nil
+    if let v = stmt.value {
+      value = try evaluate(expr: v)
+    }
+    throw .return(Return(value: value))
   }
 }
 

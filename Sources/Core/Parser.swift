@@ -91,7 +91,33 @@ extension Parser {
       let right = try unary()
       return .unary(Expr.Unary(op: op, right: right))
     }
-    return try primary()
+    return try call()
+  }
+
+  private func finishCall(callee expr: Expr) throws(LoxError) -> Expr {
+    var arguments: [Expr] = []
+    if !check(.rightParen) {
+      repeat {
+        if arguments.count >= 255 {
+          throw .parser(error(.maximumArgumentCounts))
+        }
+        arguments.append(try expression())
+      } while match(.comma)
+    }
+    let paren = try consume(type: .rightParen, err: .expectAfter(.rightParen, "value"))
+    return .call(Expr.Call(callee: expr, paren: paren, arguments: arguments))
+  }
+
+  private func call() throws(LoxError) -> Expr {
+    var expr = try primary()
+    while true {
+      if match(.leftParen) {
+        expr = try finishCall(callee: expr)
+      } else {
+        break
+      }
+    }
+    return expr
   }
 
   private func primary() throws(LoxError) -> Expr {
@@ -105,11 +131,9 @@ extension Parser {
     case .ident(_): return .variable(current)
     case .leftParen:
       let output = try expression()
-      try consume(type: .rightParen) { [unowned self] in
-        .expectAfterExpression(peek(), $0)
-      }
+      try consume(type: .rightParen, err: .expectAfter(.rightParen, "expression"))
       return Expr.grouping(output)
-    default: throw .parser(.expectExpression(peek()))
+    default: throw .parser(error(.expectExpression))
     }
   }
 }
@@ -119,29 +143,41 @@ extension Parser {
     if match(.for) { return try forStatement() }
     if match(.if) { return try ifStatement() }
     if match(.print) { return try printStatement() }
+    if match(.return) { return try returnStatement() }
     if match(.while) { return try whileStatement() }
     if match(.leftBrace) { return .block(Stmt.Block(statements: try blockStatement())) }
     return try expressionStatement()
   }
 
   private func declaration() throws(LoxError) -> Stmt {
-    if match(.var) {
-      return try varDeclaration()
-    }
+    if match(.func) { return try function(kind: "function") }
+    if match(.var) { return try varDeclaration() }
     return try statement()
   }
 
-  private func varDeclaration() throws(LoxError) -> Stmt {
-    let name = try consume(type: .ident("")) { [unowned self] _ in
-      .expectVariableName(peek())
+  private func function(kind: String) throws(LoxError) -> Stmt {
+    let name = try consume(type: .ident(""), err: .expect(kind))
+    try consume(type: .leftParen, err: .expectAfter(.leftParen, "\(kind) name"))
+    var parameters: [Token] = []
+    if !check(.rightParen) {
+      repeat {
+        if parameters.count >= 255 { throw .parser(error(.maximumArgumentCounts)) }
+        parameters.append(try consume(type: .ident(""), err: .expect("parameter")))
+      } while match(.comma)
     }
+    try consume(type: .rightParen, err: .expectAfter(.rightParen, "parameters"))
+    try consume(type: .leftBrace, err: .expectBefore(.leftBrace, "\(kind) body"))
+    let body = try blockStatement()
+    return .function(Stmt.Function(name: name, params: parameters, body: body))
+  }
+
+  private func varDeclaration() throws(LoxError) -> Stmt {
+    let name = try consume(type: .ident(""), err: .expectVariableName)
     var initializer: Expr? = .none
     if match(.equal) {
       initializer = try expression()
     }
-    try consume(type: .semicolon) { [unowned self] in
-      .expectAfterVariableDeclaration(peek(), $0)
-    }
+    try consume(type: .semicolon, err: .expectAfter(.semicolon, "variable declaration"))
     return .var(Stmt.Var(name: name, initializer: initializer))
   }
 }
@@ -159,10 +195,18 @@ extension Parser {
 
   private func printStatement() throws(LoxError) -> Stmt {
     let value = try expression()
-    try consume(type: .semicolon) { [unowned self] in
-      .expectAfterValue(peek(), $0)
-    }
+    try consume(type: .semicolon, err: .expectAfter(.semicolon, "value"))
     return .print(value)
+  }
+
+  private func returnStatement() throws(LoxError) -> Stmt {
+    let keyword = previous
+    var value: Expr?
+    if !check(.semicolon) {
+      value = try expression()
+    }
+    try consume(type: .semicolon, err: .expectAfter(.semicolon, "return value"))
+    return Stmt.return(Stmt.Return(keyword: keyword, value: value))
   }
 
   private func whileStatement() throws(LoxError) -> Stmt {
@@ -172,9 +216,7 @@ extension Parser {
   }
 
   private func forStatement() throws(LoxError) -> Stmt {
-    try consume(type: .leftParen) { [unowned self] in
-      .expectBlock(peek(), $0)
-    }
+    try consume(type: .leftParen, err: .expectAfter(.leftParen, "block"))
     let initializer: Stmt?
     if match(.semicolon) {
       initializer = .none
@@ -190,18 +232,14 @@ extension Parser {
         Expr.literal(.true)
       }
 
-    try consume(type: .semicolon) { [unowned self] in
-      .expectAfterExpression(peek(), $0)
-    }
+    try consume(type: .semicolon, err: .expectAfter(.semicolon, "expression"))
     let increment: Expr? =
       if !check(.rightParen) {
         try expression()
       } else {
         .none
       }
-    try consume(type: .rightParen) { [unowned self] in
-      .expectAfterExpression(peek(), $0)
-    }
+    try consume(type: .rightParen, err: .expectAfter(.rightParen, "expression"))
     var body = try statement()
     if let increment {
       body = .block(Stmt.Block(statements: [body, .expr(increment)]))
@@ -218,17 +256,13 @@ extension Parser {
     while !check(.rightBrace), !isAtEnd {
       statements.append(try declaration())
     }
-    try consume(type: .rightBrace) { [unowned self] in
-      .expectBlock(peek(), $0)
-    }
+    try consume(type: .rightBrace, err: .expectAfter(.rightBrace, "block"))
     return statements
   }
 
   private func expressionStatement() throws(LoxError) -> Stmt {
     let expr = try expression()
-    try consume(type: .semicolon) { [unowned self] in
-      .expectAfterExpression(peek(), $0)
-    }
+    try consume(type: .semicolon, err: .expectAfter(.semicolon, "expression"))
     return .expr(expr)
   }
 
@@ -240,7 +274,7 @@ extension Parser {
       if case let .variable(t) = expr {
         return .assign(Expr.Assign(name: t, value: value))
       }
-      throw .parser(.invalidAssignTarget(equals))
+      throw .parser(error(.invalidAssignTarget, token: equals))
     }
     return expr
   }
@@ -284,14 +318,9 @@ extension Parser {
   }
 
   @discardableResult
-  private func consume(
-    type: TokenType,
-    expect: @escaping (TokenType) -> ParserError
-  ) throws(LoxError) -> Token {
-    if check(type) {
-      return advance()
-    }
-    throw .parser(expect(type))
+  private func consume(type: TokenType, err: ParserError.Kind) throws(LoxError) -> Token {
+    if check(type) { return advance() }
+    throw .parser(error(err))
   }
 
   private func synchronize() {
@@ -311,5 +340,9 @@ extension Parser {
         advance()
       }
     }
+  }
+
+  private func error(_ kind: ParserError.Kind, token: Token? = .none) -> ParserError {
+    ParserError(kind: kind, token: token ?? peek())
   }
 }

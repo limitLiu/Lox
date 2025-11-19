@@ -44,10 +44,10 @@ extension Lox {
       case .success(let stmts):
         Lox.interpreter.interpret(statements: stmts)
       case .failure(let e):
-        print(e.description)
+        print(e.localizedDescription)
       }
     case .failure(let error):
-      print(error.description)
+      print(error.localizedDescription)
     }
   }
 }

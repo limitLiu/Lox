@@ -14,8 +14,8 @@ final class Environment {
     if let value = values[name.lexeme] {
       return value
     }
-    if enclosing != nil {
-      return try enclosing?.get(name)
+    if let enclosing {
+      return try enclosing.get(name)
     }
     throw .environment(.undefinedVariable(name.lexeme))
   }
@@ -25,10 +25,12 @@ final class Environment {
       values[name.lexeme] = value
       return
     }
-    if enclosing != nil {
-      try enclosing?.assign(name, forValue: value)
+    if let enclosing {
+      try enclosing.assign(name, forValue: value)
       return
     }
     throw .environment(.undefinedVariable(name.lexeme))
   }
 }
+
+extension Environment: @unchecked Sendable {}

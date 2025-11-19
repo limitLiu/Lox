@@ -13,30 +13,32 @@ public indirect enum Expr {
   case variable(Token)
 }
 
+extension Expr: Sendable {}
+
 extension Expr {
-  public struct Assign {
+  public struct Assign: Sendable {
     let name: Token
     let value: Expr
   }
 
-  public struct Binary {
+  public struct Binary: Sendable {
     let left: Expr
     let op: Token
     let right: Expr
   }
 
-  public struct Call {
+  public struct Call: Sendable {
     let callee: Expr
     let paren: Token
     let arguments: [Expr]
   }
 
-  public struct Get {
+  public struct Get: Sendable {
     let object: Expr
     let name: Token
   }
 
-  public enum Literal {
+  public enum Literal: Sendable {
     case number(Double)
     case string(String)
     case `true`
@@ -44,24 +46,24 @@ extension Expr {
     case `nil`
   }
 
-  public struct Logical {
+  public struct Logical: Sendable {
     let left: Expr
     let op: Token
     let right: Expr
   }
 
-  public struct Set {
+  public struct Set: Sendable {
     let object: Expr
     let name: Token
     let value: Expr
   }
 
-  public struct Super {
+  public struct Super: Sendable {
     let keyword: Token
     let method: Token
   }
 
-  public struct Unary {
+  public struct Unary: Sendable {
     let op: Token
     let right: Expr
   }
