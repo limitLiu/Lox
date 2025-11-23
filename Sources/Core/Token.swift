@@ -10,6 +10,8 @@ extension Token: CustomStringConvertible {
   }
 }
 
+extension Token: Hashable {}
+
 extension Token: Equatable {
   public static func == (lhs: Token, rhs: Token) -> Bool {
     lhs.type == rhs.type && lhs.lexeme == rhs.lexeme && lhs.line == rhs.line
@@ -26,6 +28,8 @@ public nonisolated enum TokenType {
     `while`
   case eof
 }
+
+extension TokenType: Hashable {}
 
 extension TokenType: Sendable {}
 

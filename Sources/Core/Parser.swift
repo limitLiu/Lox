@@ -128,7 +128,7 @@ extension Parser {
     case .nil: return .literal(.nil)
     case .number(let n): return .literal(.number(n))
     case .str(let s): return .literal(.string(s))
-    case .ident(_): return .variable(current)
+    case .ident(_): return .variable(Expr.Variable(name: current))
     case .leftParen:
       let output = try expression()
       try consume(type: .rightParen, err: .expectAfter(.rightParen, "expression"))
@@ -272,7 +272,7 @@ extension Parser {
       let equals = previous
       let value = try assignment()
       if case let .variable(t) = expr {
-        return .assign(Expr.Assign(name: t, value: value))
+        return .assign(Expr.Assign(name: t.name, value: value))
       }
       throw .parser(error(.invalidAssignTarget, token: equals))
     }

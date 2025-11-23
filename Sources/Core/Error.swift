@@ -20,6 +20,7 @@ public enum LoxError: Swift.Error {
   case interpreter(InterpreterError)
   case environment(EnvironmentError)
   case `return`(Return)
+  case resolver(ResolverError)
   case unknown(any Error)
 }
 
@@ -32,6 +33,7 @@ extension LoxError: LocalizedError {
     case let .parser(e): e.errorDescription
     case let .interpreter(e): e.errorDescription
     case let .environment(e): e.errorDescription
+    case let .resolver(e): e.errorDescription
     case let .unknown(e): e.localizedDescription
     case let .return(ret): ret.value.description
     }
@@ -137,6 +139,30 @@ public enum EnvironmentError: LoxErrorProtocol {
   }
 
   case undefinedVariable(String)
+}
+
+public enum ResolverError: LoxErrorProtocol {
+  case canNotReadLocalVariable(Token)
+  case alreadyVariableSameName(Token)
+  case returnFromTopLevel(Token)
+
+  var line: Int { token.line }
+
+  var message: String {
+    switch self {
+    case .canNotReadLocalVariable: "Can't read local variable in its own initializer."
+    case .alreadyVariableSameName: "Already variable with this name in this scope."
+    case .returnFromTopLevel: "Can't return from top-level code."
+    }
+  }
+
+  private var token: Token {
+    switch self {
+    case .canNotReadLocalVariable(let t): t
+    case .alreadyVariableSameName(let t): t
+    case .returnFromTopLevel(let t): t
+    }
+  }
 }
 
 public struct Return: Swift.Error {

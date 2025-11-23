@@ -6,7 +6,7 @@ struct Lox: ParsableCommand {
   @Argument(help: "The path of the Lox script file.")
   var script: String?
 
-  nonisolated(unsafe) static let interpreter = Interpreter()
+  static let interpreter = Interpreter()
 
   mutating func run() throws {
     if let script {
@@ -42,7 +42,12 @@ extension Lox {
       let parser = Parser(tokens)
       switch parser.parse() {
       case .success(let stmts):
-        Lox.interpreter.interpret(statements: stmts)
+        let resolver = Resolver(Lox.interpreter)
+        switch resolver.resolve(stmts: stmts) {
+        case .failure(let e): print(e.localizedDescription)
+        case .success:
+          Lox.interpreter.interpret(statements: stmts)
+        }
       case .failure(let e):
         print(e.localizedDescription)
       }

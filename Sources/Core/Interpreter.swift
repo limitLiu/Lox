@@ -1,6 +1,12 @@
 import struct Foundation.Date
+import struct Synchronization.Mutex
 
-public final class Interpreter {
+public final class Interpreter: Sendable {
+  private struct State {
+    var environment: Environment?
+    var locals: [Expr: Int] = [:]
+  }
+
   public init() {
     globals = Environment()
     environment = globals
@@ -21,7 +27,17 @@ public final class Interpreter {
 
   let globals: Environment
 
-  private var environment: Environment
+  private let state = Mutex(State())
+
+  private var environment: Environment? {
+    get { state.withLock { $0.environment } }
+    set { state.withLock { $0.environment = newValue } }
+  }
+
+  private var locals: [Expr: Int] {
+    get { state.withLock { $0.locals } }
+    set { state.withLock { $0.locals = newValue } }
+  }
 
   public func interpret(statements: [Stmt]) {
     do {
@@ -131,18 +147,30 @@ extension Interpreter {
     }
   }
 
-  private func evaluate(`var` token: Token) throws(LoxError) -> Value {
-    (try environment.get(token)) ?? .nil
+  private func evaluate(`var` variable: Expr.Variable) throws(LoxError) -> Value {
+    if let distance = locals[.variable(variable)] {
+      (try environment?.get(at: distance, name: variable.name.lexeme)) ?? .nil
+    } else {
+      try globals.get(variable.name) ?? .nil
+    }
   }
 
   private func evaluate(assign expr: Expr.Assign) throws(LoxError) -> Value {
     let value = try evaluate(expr: expr.value)
-    try environment.assign(expr.name, forValue: value)
+    if let distance = locals[.assign(expr)] {
+      environment?.assign(at: distance, name: expr.name, value: value)
+    } else {
+      try globals.assign(expr.name, forValue: value)
+    }
     return value
   }
 }
 
 extension Interpreter {
+  public func resolve(expr: Expr, depth: Int) {
+    locals[expr] = depth
+  }
+
   private func execute(_ stmt: Stmt) throws(LoxError) {
     switch stmt {
     case let .block(block): try execute(block.statements, withEnv: Environment(enclosing: environment))
@@ -158,7 +186,7 @@ extension Interpreter {
 
   private func evaluate(`var` stmt: Stmt.Var) throws(LoxError) {
     let value = try stmt.initializer.map(evaluate(expr:))
-    environment.define(stmt.name.lexeme, forValue: value)
+    environment?.define(stmt.name.lexeme, forValue: value)
   }
 
   private func evaluate(`while` stmt: Stmt.While) throws(LoxError) {
@@ -168,8 +196,10 @@ extension Interpreter {
   }
 
   private func evaluate(fn stmt: Stmt.Function) throws(LoxError) {
-    let fn = Fn(declaration: stmt, closure: environment)
-    environment.define(stmt.name.lexeme, forValue: .callable(AnyCallable(fn)))
+    if let environment {
+      let fn = Fn(declaration: stmt, closure: environment)
+      environment.define(stmt.name.lexeme, forValue: .callable(AnyCallable(fn)))
+    }
   }
 
   func execute(_ statements: [Stmt], withEnv env: Environment) throws(LoxError) {
