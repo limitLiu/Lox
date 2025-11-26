@@ -11,12 +11,12 @@ public struct ASTPrinter {
       parenthesize(name: "call", parts: [print(expr: call.callee)] + call.arguments.map { print(expr: $0) })
     case let .get(g):
       parenthesize(name: ".", parts: [print(expr: g.object), g.name.lexeme])
-    case .grouping(let expr):
+    case let .grouping(expr):
       parenthesize(name: "group", expressions: expr)
     case let .literal(literal):
       switch literal {
-      case .number(let n): String(describing: n)
-      case .string(let s): s
+      case let .number(n): String(describing: n)
+      case let .string(s): s
       case .true: "true"
       case .false: "false"
       case .nil: "nil"

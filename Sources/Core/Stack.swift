@@ -10,13 +10,24 @@ public struct Stack<E: Sendable>: Sendable {
     inner.popLast()
   }
 
-  public var peek: E? {
-    inner.last
+  public var top: E? {
+    get { inner.last }
+
+    set {
+      guard let newValue, !inner.isEmpty else { return }
+      inner[inner.count - 1] = newValue
+    }
   }
 
   public var isEmpty: Bool { inner.isEmpty }
 
   public var count: Int { inner.count }
 
-  public func toArray() -> [E] { inner.map { $0 } }
+  public func toArray() -> [E] { inner }
+}
+
+extension Stack {
+  subscript(_ index: Int) -> E {
+    inner[index]
+  }
 }

@@ -14,53 +14,44 @@ public final class Resolver {
 }
 
 extension Resolver {
-
-  public func resolve(stmts: [Stmt]) -> Result<()> {
-    do {
-      for stmt in stmts {
-        try resolve(stmt: stmt)
-      }
-      return .success(())
-    } catch {
-      return .failure(error)
+  public func resolve(stmts: [Stmt]) throws(LoxError) {
+    for stmt in stmts {
+      try resolve(stmt: stmt)
     }
   }
 
   private func resolve(stmt: Stmt) throws(LoxError) {
     switch stmt {
-    case .block(let stmt):
+    case let .block(stmt):
       beginScope()
       defer { endScope() }
-      switch resolve(stmts: stmt.statements) {
-      case .failure(let e): throw e
-      default: break
-      }
-    case .var(let stmt):
+      try resolve(stmts: stmt.statements)
+    case let .var(stmt):
       try declare(name: stmt.name)
       if let initializer = stmt.initializer {
         try resolve(expr: initializer)
       }
       define(name: stmt.name)
-    case .function(let stmt):
+    case let .function(stmt):
       try declare(name: stmt.name)
       define(name: stmt.name)
       try resolve(fn: stmt, kind: .fn)
-    case .expr(let expr): try resolve(expr: expr)
-    case .if(let stmt):
+    case let .expr(expr): try resolve(expr: expr)
+    case let .if(stmt):
       try resolve(expr: stmt.condition)
       try resolve(stmt: stmt.thenBranch)
       if let elseBranch = stmt.elseBranch {
         try resolve(stmt: elseBranch)
       }
-    case .print(let expr): try resolve(expr: expr)
-    case .return(let stmt):
+    case let .print(expr): try resolve(expr: expr)
+    case let .return(stmt):
       if currentFn == FunctionType.none {
         throw .resolver(.returnFromTopLevel(stmt.keyword))
       }
       if let value = stmt.value {
         try resolve(expr: value)
       }
-    case .while(let stmt):
+    case let .while(stmt):
       try resolve(expr: stmt.condition)
       try resolve(stmt: stmt.body)
     }
@@ -72,28 +63,28 @@ extension Resolver {
 extension Resolver {
   private func resolve(expr: Expr) throws(LoxError) {
     switch expr {
-    case .variable(let variable):
-      if !scopes.isEmpty, scopes.peek?[variable.name.lexeme] == false {
+    case let .variable(variable):
+      if !scopes.isEmpty, scopes.top?[variable.name.lexeme] == false {
         throw .resolver(.canNotReadLocalVariable(variable.name))
       }
       resolve(local: expr, name: variable.name)
-    case .assign(let assign):
+    case let .assign(assign):
       try resolve(expr: assign.value)
       resolve(local: expr, name: assign.name)
-    case .binary(let binary):
+    case let .binary(binary):
       try resolve(expr: binary.left)
       try resolve(expr: binary.right)
-    case .call(let call):
+    case let .call(call):
       try resolve(expr: call.callee)
       for argument in call.arguments {
         try resolve(expr: argument)
       }
-    case .grouping(let grouping): try resolve(expr: grouping)
+    case let .grouping(grouping): try resolve(expr: grouping)
     case .literal: break
-    case .logical(let logical):
+    case let .logical(logical):
       try resolve(expr: logical.left)
       try resolve(expr: logical.right)
-    case .unary(let unary): try resolve(expr: unary.right)
+    case let .unary(unary): try resolve(expr: unary.right)
     case .get, .set, .this, .super:
       break
     }
@@ -109,26 +100,25 @@ extension Resolver {
 
   private func declare(name: Token) throws(LoxError) {
     if scopes.isEmpty { return }
-    if var scope = scopes.peek {
-      scope[name.lexeme] = false
-      if scope.keys.contains(name.lexeme) {
-        throw .resolver(.alreadyVariableSameName(name))
-      }
+    if scopes.top?[name.lexeme] != nil {
+      throw .resolver(.alreadyVariableSameName(name))
     }
+    scopes.top?[name.lexeme] = false
   }
 
   private func define(name: Token) {
     if scopes.isEmpty { return }
-    var scope = scopes.peek
-    scope?[name.lexeme] = true
+    scopes.top?[name.lexeme] = true
   }
 
   private func resolve(local expr: Expr, name: Token) {
-    for (offset, element) in scopes.toArray().enumerated().reversed()
-    where element.keys.contains(name.lexeme) {
-      let depth = scopes.count - 1 - offset
-      interpreter.resolve(expr: expr, depth: depth)
-      return
+    for i in stride(from: scopes.count - 1, through: 0, by: -1) {
+      let scope = scopes[i]
+      if scope.keys.contains(name.lexeme) {
+        let depth = scopes.count - 1 - i
+        interpreter.resolve(expr: expr, depth: depth)
+        return
+      }
     }
   }
 
@@ -140,10 +130,7 @@ extension Resolver {
       try declare(name: param)
       define(name: param)
     }
-    switch resolve(stmts: fn.body) {
-    case .failure(let e): throw e
-    default: break
-    }
+    try resolve(stmts: fn.body)
     endScope()
     currentFn = enclosingFn
   }

@@ -63,7 +63,7 @@ extension Scanner {
   }
 
   private func string() throws(LoxError) {
-    while peek() != "\"" && !isAtEnd {
+    while peek() != "\"", !isAtEnd {
       if peek() == "\n" { line += 1 }
       advance()
     }
@@ -84,7 +84,9 @@ extension Scanner {
   }
 
   private func identifier() {
-    while isAlphaNumeric(peek()) { advance() }
+    while isAlphaNumeric(peek()) {
+      advance()
+    }
     let text = src[start ..< current].description
     addToken(Self.Keywords[text] ?? .ident(text))
   }
@@ -94,10 +96,14 @@ extension Scanner {
   }
 
   private func number() {
-    while isDigit(peek()) { advance() }
-    if peek() == "." && isDigit(peekNext()) {
+    while isDigit(peek()) {
       advance()
-      while isDigit(peek()) { advance() }
+    }
+    if peek() == ".", isDigit(peekNext()) {
+      advance()
+      while isDigit(peek()) {
+        advance()
+      }
     }
     addToken(.number(Double(src[start ..< current])!))
   }
@@ -105,21 +111,17 @@ extension Scanner {
 
 // MARK: Public Methods
 
-extension Scanner {
-  public func scanTokens() -> Result<[Token]> {
+public extension Scanner {
+  func scanTokens() throws(LoxError) -> [Token] {
     while !isAtEnd {
       start = current
-      do {
-        try scanToken()
-      } catch {
-        return .failure(error)
-      }
+      try scanToken()
     }
     tokens.append(Token(type: .eof, lexeme: "", line: line))
-    return .success(tokens)
+    return tokens
   }
 
-  public func scanToken() throws(LoxError) {
+  func scanToken() throws(LoxError) {
     let c = advance()
     switch c {
     case "(": addToken(.leftParen)
@@ -139,7 +141,9 @@ extension Scanner {
     case "\"": try string()
     case "/":
       if match("/") {
-        while peek() != "\n" && !isAtEnd { advance() }
+        while peek() != "\n", !isAtEnd {
+          advance()
+        }
       } else {
         addToken(.slash)
       }

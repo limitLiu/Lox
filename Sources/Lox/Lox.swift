@@ -36,22 +36,15 @@ extension Lox {
   }
 
   private func execute(_ src: String) {
-    let scanner = Scanner(src)
-    switch scanner.scanTokens() {
-    case .success(let tokens):
+    do {
+      let scanner = Scanner(src)
+      let tokens = try scanner.scanTokens()
       let parser = Parser(tokens)
-      switch parser.parse() {
-      case .success(let stmts):
-        let resolver = Resolver(Lox.interpreter)
-        switch resolver.resolve(stmts: stmts) {
-        case .failure(let e): print(e.localizedDescription)
-        case .success:
-          Lox.interpreter.interpret(statements: stmts)
-        }
-      case .failure(let e):
-        print(e.localizedDescription)
-      }
-    case .failure(let error):
+      let stmts = try parser.parse()
+      let resolver = Resolver(Lox.interpreter)
+      try resolver.resolve(stmts: stmts)
+      Lox.interpreter.interpret(statements: stmts)
+    } catch {
       print(error.localizedDescription)
     }
   }

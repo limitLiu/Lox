@@ -5,13 +5,13 @@ import PackageDescription
 
 let package = Package(
   name: "Lox",
-  platforms: [.macOS(.v10_15)],
+  platforms: [.macOS(.v15)],
   products: [
     .executable(name: "lox", targets: ["Lox"]),
     .library(name: "Core", targets: ["Core"]),
   ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.6.2")
+    .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.6.2"),
   ],
   targets: [
     .executableTarget(
@@ -19,7 +19,7 @@ let package = Package(
       dependencies: [
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
         "Core",
-      ],
+      ]
     ),
     .target(
       name: "Core",

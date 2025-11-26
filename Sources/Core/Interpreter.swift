@@ -1,15 +1,16 @@
 import struct Foundation.Date
+import struct Foundation.UUID
 import struct Synchronization.Mutex
 
 public final class Interpreter: Sendable {
   private struct State {
     var environment: Environment?
-    var locals: [Expr: Int] = [:]
+    var locals: [UUID: Int] = [:]
   }
 
   public init() {
-    globals = Environment()
-    environment = globals
+    self.globals = Environment()
+    self.environment = globals
     globals.define(
       "clock",
       forValue: .callable(
@@ -34,7 +35,7 @@ public final class Interpreter: Sendable {
     set { state.withLock { $0.environment = newValue } }
   }
 
-  private var locals: [Expr: Int] {
+  private var locals: [UUID: Int] {
     get { state.withLock { $0.locals } }
     set { state.withLock { $0.locals = newValue } }
   }
@@ -57,13 +58,13 @@ extension Interpreter {
     case let .assign(assign): try evaluate(assign: assign)
     case let .binary(binary): try evaluate(binary: binary)
     case let .call(call): try evaluate(call: call)
-    case .get(_): Value.nil
+    case .get: Value.nil
     case let .grouping(grouping): try evaluate(expr: grouping)
     case let .literal(literal): try evaluate(literal: literal)
     case let .logical(logical): try evaluate(logical: logical)
     case let .set(s): try evaluate(set: s)
-    case .super(_): Value.nil
-    case .this(_): Value.nil
+    case .super: Value.nil
+    case .this: Value.nil
     case let .unary(unary): try evaluate(unary: unary)
     case let .variable(variable): try evaluate(var: variable)
     }
@@ -89,8 +90,8 @@ extension Interpreter {
 
   private func evaluate(literal expr: Expr.Literal) throws(LoxError) -> Value {
     switch expr {
-    case .number(let n): .number(n)
-    case .string(let s): .string(s)
+    case let .number(n): .number(n)
+    case let .string(s): .string(s)
     case .true: .boolean(true)
     case .false: .boolean(false)
     case .nil: .nil
@@ -112,7 +113,7 @@ extension Interpreter {
   private func evaluate(unary expr: Expr.Unary) throws(LoxError) -> Value {
     let right = try evaluate(expr: expr.right)
     return switch (expr.op.type, right) {
-    case (.minus, .number(let n)): .number(-n)
+    case let (.minus, .number(n)): .number(-n)
     case (.minus, _): throw .interpreter(.typeMismatch(expr.op, right))
     case (.bang, _): .boolean(!right.isTruthy)
     default: Value.boolean(false)
@@ -132,24 +133,20 @@ extension Interpreter {
       default: .number(l / r)
       }
     case let (.star, .number(l), .number(r)): .number(l * r)
-
     case let (.plus, .string(l), .string(r)): .string(l + r)
-
     case let (.less, .number(l), .number(r)): .boolean(l < r)
     case let (.lessEqual, .number(l), .number(r)): .boolean(l <= r)
     case let (.greater, .number(l), .number(r)): .boolean(l > r)
     case let (.greaterEqual, .number(l), .number(r)): .boolean(l >= r)
-
     case (.equalEqual, _, _): .boolean(left == right)
     case (.bangEqual, _, _): .boolean(left != right)
-
     default: throw .interpreter(.binaryFailure(expr.op, left, right))
     }
   }
 
   private func evaluate(`var` variable: Expr.Variable) throws(LoxError) -> Value {
-    if let distance = locals[.variable(variable)] {
-      (try environment?.get(at: distance, name: variable.name.lexeme)) ?? .nil
+    if let distance = locals[variable.id] {
+      try (environment?.get(at: distance, name: variable.name.lexeme)) ?? .nil
     } else {
       try globals.get(variable.name) ?? .nil
     }
@@ -157,7 +154,7 @@ extension Interpreter {
 
   private func evaluate(assign expr: Expr.Assign) throws(LoxError) -> Value {
     let value = try evaluate(expr: expr.value)
-    if let distance = locals[.assign(expr)] {
+    if let distance = locals[expr.id] {
       environment?.assign(at: distance, name: expr.name, value: value)
     } else {
       try globals.assign(expr.name, forValue: value)
@@ -168,7 +165,8 @@ extension Interpreter {
 
 extension Interpreter {
   public func resolve(expr: Expr, depth: Int) {
-    locals[expr] = depth
+    guard let id = expr.id else { return }
+    locals[id] = depth
   }
 
   private func execute(_ stmt: Stmt) throws(LoxError) {
@@ -176,7 +174,7 @@ extension Interpreter {
     case let .block(block): try execute(block.statements, withEnv: Environment(enclosing: environment))
     case let .expr(expr): try evaluate(expr: expr)
     case let .if(i): try evaluate(if: i)
-    case let .print(expr): Swift.print(try evaluate(expr: expr))
+    case let .print(expr): try Swift.print(evaluate(expr: expr))
     case let .return(ret): try evaluate(return: ret)
     case let .var(statement): try evaluate(var: statement)
     case let .while(statement): try evaluate(while: statement)
@@ -189,8 +187,8 @@ extension Interpreter {
     environment?.define(stmt.name.lexeme, forValue: value)
   }
 
-  private func evaluate(`while` stmt: Stmt.While) throws(LoxError) {
-    while (try evaluate(expr: stmt.condition)).isTruthy {
+  private func evaluate(while stmt: Stmt.While) throws(LoxError) {
+    while try (evaluate(expr: stmt.condition)).isTruthy {
       try execute(stmt.body)
     }
   }
@@ -211,15 +209,15 @@ extension Interpreter {
     }
   }
 
-  private func evaluate(`if` stmt: Stmt.If) throws(LoxError) {
-    if (try evaluate(expr: stmt.condition)).isTruthy {
+  private func evaluate(if stmt: Stmt.If) throws(LoxError) {
+    if try (evaluate(expr: stmt.condition)).isTruthy {
       try execute(stmt.thenBranch)
     } else if let statement = stmt.elseBranch {
       try execute(statement)
     }
   }
 
-  private func evaluate(`return` stmt: Stmt.Return) throws(LoxError) {
+  private func evaluate(return stmt: Stmt.Return) throws(LoxError) {
     var value: Value = .nil
     if let v = stmt.value {
       value = try evaluate(expr: v)
@@ -228,10 +226,10 @@ extension Interpreter {
   }
 }
 
-extension Value {
-  fileprivate var isTruthy: Bool {
+private extension Value {
+  var isTruthy: Bool {
     switch self {
-    case .boolean(let b): b
+    case let .boolean(b): b
     case .nil: false
     default: true
     }

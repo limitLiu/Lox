@@ -6,17 +6,17 @@ public class Parser {
     self.tokens = tokens
   }
 
-  public func parse() -> Result<[Stmt]> {
+  public func parse() throws(LoxError) -> [Stmt] {
     var statements: [Stmt] = []
     while !isAtEnd {
       do {
-        statements.append(try declaration())
+        try statements.append(declaration())
       } catch {
         synchronize()
-        return .failure(error)
+        throw error
       }
     }
-    return .success(statements)
+    return statements
   }
 }
 
@@ -101,7 +101,7 @@ extension Parser {
         if arguments.count >= 255 {
           throw .parser(error(.maximumArgumentCounts))
         }
-        arguments.append(try expression())
+        try arguments.append(expression())
       } while match(.comma)
     }
     let paren = try consume(type: .rightParen, err: .expectAfter(.rightParen, "value"))
@@ -126,9 +126,9 @@ extension Parser {
     case .false: return .literal(.false)
     case .true: return .literal(.true)
     case .nil: return .literal(.nil)
-    case .number(let n): return .literal(.number(n))
-    case .str(let s): return .literal(.string(s))
-    case .ident(_): return .variable(Expr.Variable(name: current))
+    case let .number(n): return .literal(.number(n))
+    case let .str(s): return .literal(.string(s))
+    case .ident: return .variable(Expr.Variable(name: current))
     case .leftParen:
       let output = try expression()
       try consume(type: .rightParen, err: .expectAfter(.rightParen, "expression"))
@@ -145,7 +145,7 @@ extension Parser {
     if match(.print) { return try printStatement() }
     if match(.return) { return try returnStatement() }
     if match(.while) { return try whileStatement() }
-    if match(.leftBrace) { return .block(Stmt.Block(statements: try blockStatement())) }
+    if match(.leftBrace) { return try .block(Stmt.Block(statements: blockStatement())) }
     return try expressionStatement()
   }
 
@@ -162,7 +162,7 @@ extension Parser {
     if !check(.rightParen) {
       repeat {
         if parameters.count >= 255 { throw .parser(error(.maximumArgumentCounts)) }
-        parameters.append(try consume(type: .ident(""), err: .expect("parameter")))
+        try parameters.append(consume(type: .ident(""), err: .expect("parameter")))
       } while match(.comma)
     }
     try consume(type: .rightParen, err: .expectAfter(.rightParen, "parameters"))
@@ -254,7 +254,7 @@ extension Parser {
   private func blockStatement() throws(LoxError) -> [Stmt] {
     var statements: [Stmt] = []
     while !check(.rightBrace), !isAtEnd {
-      statements.append(try declaration())
+      try statements.append(declaration())
     }
     try consume(type: .rightBrace, err: .expectAfter(.rightBrace, "block"))
     return statements
@@ -329,12 +329,12 @@ extension Parser {
       if previous.type == .semicolon { return }
       switch peek().type {
       case .class, .func,
-        .var,
-        .for,
-        .if,
-        .while,
-        .print,
-        .return:
+           .var,
+           .for,
+           .if,
+           .while,
+           .print,
+           .return:
         return
       default:
         advance()
