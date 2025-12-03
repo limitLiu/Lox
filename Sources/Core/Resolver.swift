@@ -54,6 +54,9 @@ extension Resolver {
     case let .while(stmt):
       try resolve(expr: stmt.condition)
       try resolve(stmt: stmt.body)
+    case let .class(stmt):
+      try declare(name: stmt.name)
+      define(name: stmt.name)
     }
   }
 }
@@ -85,8 +88,11 @@ extension Resolver {
       try resolve(expr: logical.left)
       try resolve(expr: logical.right)
     case let .unary(unary): try resolve(expr: unary.right)
-    case .get, .set, .this, .super:
-      break
+    case let .get(expr): try resolve(expr: expr.object)
+    case let .set(expr):
+      try resolve(expr: expr.value)
+      try resolve(expr: expr.object)
+    case .this, .super: break
     }
   }
 }

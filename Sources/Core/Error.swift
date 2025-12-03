@@ -70,13 +70,13 @@ public struct ParserError: LoxErrorProtocol {
 
     var message: String {
       switch self {
-      case .expectBefore(let type, let kind): "Expect '\(type)' before \(kind)."
-      case .expectAfter(let type, let kind): "Expect '\(type)' after \(kind)."
+      case let .expectBefore(type, kind): "Expect '\(type)' before \(kind)."
+      case let .expectAfter(type, kind): "Expect '\(type)' after \(kind)."
       case .expectVariableName: "Expect variable name."
       case .expectExpression: "Expect expression."
       case .invalidAssignTarget: "Invalid assignment target."
       case .maximumArgumentCounts: "Can't have more than 255 arguments."
-      case .expect(let s): "Expect \(s) name."
+      case let .expect(s): "Expect \(s) name."
       }
     }
   }
@@ -102,21 +102,25 @@ public enum InterpreterError: LoxErrorProtocol {
       "Operand must be a \(right)."
     case let .binaryFailure(op, l, r):
       "Failed to perform \(op.type) between operands \(l) \(r)."
-    case .divByZero(_, _, _): "error: division by zero."
-    case .canNotCallable(_):
+    case .divByZero: "error: division by zero."
+    case .canNotCallable:
       "Can only call functions and classes."
     case let .incorrectArgsCount(_, arity, argsCount):
       "Expected \(arity) arguments but got \(argsCount)."
+    case let .instancesHave(_, have): "Only instances have \(have)."
+    case let .undefinedProperty(name): "Undefined property '\(name.lexeme)'."
     }
   }
 
   private var token: Token {
     switch self {
-    case .typeMismatch(let t, _): t
-    case .binaryFailure(let t, _, _): t
-    case .divByZero(let t, _, _): t
-    case .canNotCallable(let t): t
-    case .incorrectArgsCount(let t, _, _): t
+    case let .typeMismatch(t, _): t
+    case let .binaryFailure(t, _, _): t
+    case let .divByZero(t, _, _): t
+    case let .canNotCallable(t): t
+    case let .incorrectArgsCount(t, _, _): t
+    case let .instancesHave(t, _): t
+    case let .undefinedProperty(t): t
     }
   }
 
@@ -125,6 +129,8 @@ public enum InterpreterError: LoxErrorProtocol {
   case divByZero(Token, Value, Value)
   case canNotCallable(Token)
   case incorrectArgsCount(Token, Int, Int)
+  case instancesHave(Token, String)
+  case undefinedProperty(Token)
 }
 
 public enum EnvironmentError: LoxErrorProtocol {
@@ -134,7 +140,7 @@ public enum EnvironmentError: LoxErrorProtocol {
 
   public var errorDescription: String? {
     switch self {
-    case .undefinedVariable(let ident): "Undefined variable '\(ident)'."
+    case let .undefinedVariable(ident): "Undefined variable '\(ident)'."
     }
   }
 
@@ -158,9 +164,9 @@ public enum ResolverError: LoxErrorProtocol {
 
   private var token: Token {
     switch self {
-    case .canNotReadLocalVariable(let t): t
-    case .alreadyVariableSameName(let t): t
-    case .returnFromTopLevel(let t): t
+    case let .canNotReadLocalVariable(t): t
+    case let .alreadyVariableSameName(t): t
+    case let .returnFromTopLevel(t): t
     }
   }
 }

@@ -58,13 +58,13 @@ extension Interpreter {
     case let .assign(assign): try evaluate(assign: assign)
     case let .binary(binary): try evaluate(binary: binary)
     case let .call(call): try evaluate(call: call)
-    case .get: Value.nil
+    case let .get(g): try evaluate(get: g)
     case let .grouping(grouping): try evaluate(expr: grouping)
     case let .literal(literal): try evaluate(literal: literal)
     case let .logical(logical): try evaluate(logical: logical)
     case let .set(s): try evaluate(set: s)
-    case .super: Value.nil
-    case .this: Value.nil
+    case let .super(sup): try evaluate(super: sup)
+    case let .this(t): try evaluate(this: t)
     case let .unary(unary): try evaluate(unary: unary)
     case let .variable(variable): try evaluate(var: variable)
     }
@@ -107,6 +107,29 @@ extension Interpreter {
   }
 
   private func evaluate(set expr: Expr.Set) throws(LoxError) -> Value {
+    let object = try evaluate(expr: expr.object)
+    switch object {
+    case let .instance(instance):
+      let value = try evaluate(expr: expr.value)
+      instance.set(expr.name, value: value)
+      return value
+    default: throw .interpreter(.instancesHave(expr.name, "properties"))
+    }
+  }
+
+  private func evaluate(get expr: Expr.Get) throws(LoxError) -> Value {
+    let object = try evaluate(expr: expr.object)
+    return switch object {
+    case let .instance(instance): try instance.get(expr.name)
+    default: throw .interpreter(.instancesHave(expr.name, "fields"))
+    }
+  }
+
+  private func evaluate(super expr: Expr.Super) throws(LoxError) -> Value {
+    .nil
+  }
+
+  private func evaluate(this expr: Expr.This) throws(LoxError) -> Value {
     .nil
   }
 
@@ -172,6 +195,7 @@ extension Interpreter {
   private func execute(_ stmt: Stmt) throws(LoxError) {
     switch stmt {
     case let .block(block): try execute(block.statements, withEnv: Environment(enclosing: environment))
+    case let .class(clazz): try execute(clazz)
     case let .expr(expr): try evaluate(expr: expr)
     case let .if(i): try evaluate(if: i)
     case let .print(expr): try Swift.print(evaluate(expr: expr))
@@ -207,6 +231,12 @@ extension Interpreter {
     for statement in statements {
       try execute(statement)
     }
+  }
+
+  func execute(_ stmt: Stmt.Class) throws(LoxError) {
+    environment?.define(stmt.name.lexeme, forValue: nil)
+    let klass = LoxClass(stmt.name.lexeme)
+    try environment?.assign(stmt.name, forValue: .callable(AnyCallable(klass)))
   }
 
   private func evaluate(if stmt: Stmt.If) throws(LoxError) {

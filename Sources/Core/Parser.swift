@@ -113,6 +113,9 @@ extension Parser {
     while true {
       if match(.leftParen) {
         expr = try finishCall(callee: expr)
+      } else if match(.dot) {
+        let name = try consume(type: .ident(""), err: .expectAfter(.ident(""), "'.'"))
+        expr = .get(Expr.Get(object: expr, name: name))
       } else {
         break
       }
@@ -150,6 +153,7 @@ extension Parser {
   }
 
   private func declaration() throws(LoxError) -> Stmt {
+    if match(.class) { return try classDeclaration() }
     if match(.func) { return try function(kind: "function") }
     if match(.var) { return try varDeclaration() }
     return try statement()
@@ -169,6 +173,17 @@ extension Parser {
     try consume(type: .leftBrace, err: .expectBefore(.leftBrace, "\(kind) body"))
     let body = try blockStatement()
     return .function(Stmt.Function(name: name, params: parameters, body: body))
+  }
+
+  private func classDeclaration() throws(LoxError) -> Stmt {
+    let name = try consume(type: .ident(""), err: .expect("class"))
+    try consume(type: .leftBrace, err: .expectBefore(.leftBrace, "class body"))
+    var methods: [Stmt] = []
+    while !check(.rightBrace), !isAtEnd {
+      try methods.append(function(kind: "method"))
+    }
+    try consume(type: .rightBrace, err: .expectAfter(.rightBrace, "class body"))
+    return .class(Stmt.Class(name: name, methods: methods))
   }
 
   private func varDeclaration() throws(LoxError) -> Stmt {
@@ -271,10 +286,13 @@ extension Parser {
     if match(.equal) {
       let equals = previous
       let value = try assignment()
-      if case let .variable(t) = expr {
+      switch expr {
+      case let .variable(t):
         return .assign(Expr.Assign(name: t.name, value: value))
+      case let .get(g):
+        return .set(Expr.Set(object: g.object, name: g.name, value: value))
+      default: throw .parser(error(.invalidAssignTarget, token: equals))
       }
-      throw .parser(error(.invalidAssignTarget, token: equals))
     }
     return expr
   }

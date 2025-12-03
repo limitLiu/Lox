@@ -16,18 +16,18 @@ public struct AnyCallable: Callable, Sendable {
     try _call(interpreter, arguments)
   }
 
-  public var description: String {
-    ""
-  }
+  public var description: String { _description() }
 
   private let _arity: @Sendable () -> Int
   private let _call: @Sendable (Interpreter, [T]) throws -> T
+  private let _description: @Sendable () -> String
 
   public init<C: Callable>(_ c: C) where C.T == Value {
-    _arity = { c.arity }
-    _call = { interpreter, arguments in
+    self._arity = { c.arity }
+    self._call = { interpreter, arguments in
       try c.call(interpreter: interpreter, arguments: arguments)
     }
+    self._description = { c.description }
   }
 }
 
